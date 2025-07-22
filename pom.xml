@@ -83,7 +83,6 @@
     </dependencies>
 
 
-
     <!-- 依赖管理 -->
     <dependencyManagement>
         <dependencies>
@@ -103,21 +102,20 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <!-- 启用 JDK 21 预览特性（虚拟线程等） -->
-                    <compilerArgs>
-                        <arg>--enable-preview</arg>
-                    </compilerArgs>
+                    <jvmArguments>--enable-preview</jvmArguments>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <compilerArgs>--enable-preview</compilerArgs>
+                    <release>21</release>
+                    <enablePreview>true</enablePreview>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
 
     <!-- 仓库声明 -->
     <repositories>
