@@ -1,0 +1,9 @@
+spring:
+  ai:
+    zhipuai:
+      chat:
+        options:
+          model: glm-4-air
+          temperature: 0.7
+      # 从启动参数中读取
+      api-key: ${ZHIPUAI_API_KEY}

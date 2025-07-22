@@ -37,3 +37,4 @@ build/
 ### Mac OS ###
 .DS_Store
 /.idea/ApifoxUploaderProjectSetting.xml
+/.idea/uiDesigner.xml

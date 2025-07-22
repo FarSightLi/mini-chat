@@ -1,7 +1,8 @@
 package org.farsight.rag.document.impl;
 
-import org.farsight.rag.document.Document;
+
 import org.farsight.rag.document.DocumentProcessor;
+import org.farsight.rag.entity.dto.Document;
 
 import java.util.List;
 
