@@ -1,5 +1,8 @@
 package org.farsight.rag.controller;
 
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -24,8 +27,8 @@ public class QaController {
 
     @Autowired
     public QaController(
-             ZhiPuAiChatModel zhiPuAiChatModel,
-             VectorStore vectorStore) {
+            ZhiPuAiChatModel zhiPuAiChatModel,
+            VectorStore vectorStore) {
         this.zhiPuAiChatModel = zhiPuAiChatModel;
         this.vectorStore = vectorStore;
     }
@@ -41,7 +44,7 @@ public class QaController {
         var prompt = new Prompt(new UserMessage(message));
         return this.zhiPuAiChatModel.stream(prompt);
     }
-    
+
     @GetMapping("/ai/rag")
     public Map<String, Object> ragGenerate(@RequestParam(value = "message", defaultValue = "Tell me about Spring AI") String message) {
         // 1. 首先从向量存储中检索相关文档
@@ -51,12 +54,12 @@ public class QaController {
                         .topK(3)
                         .build()
         );
-        
+
         // 2. 将检索到的文档内容组合成上下文
         String context = relevantDocs.stream()
                 .map(doc -> doc.toString()) // 使用toString()方法获取内容
                 .collect(Collectors.joining("\n\n"));
-        
+
         // 3. 构建带有上下文的提示词
         PromptTemplate promptTemplate = new PromptTemplate(
                 "请根据下面提供的上下文信息回答问题。如果上下文信息不足够回答问题，请说明无法基于提供的信息回答。\n\n"
@@ -64,21 +67,32 @@ public class QaController {
                         + "问题: {question}\n\n"
                         + "请根据上下文回答问题:"
         );
-        
+
         Prompt prompt = promptTemplate.create(Map.of(
                 "context", context,
                 "question", message
         ));
-        
+
         // 4. 使用智谱AI模型生成回答
         ChatResponse response = this.zhiPuAiChatModel.call(prompt);
         String generation = response.getResult().getOutput().toString(); // 使用toString()方法获取内容
-        
+
         // 5. 返回结果，包括生成的回答和使用的文档
         return Map.of(
                 "question", message,
                 "generation", generation,
                 "relevant_documents", relevantDocs
         );
+    }
+
+    @GetMapping("/ai/pro")
+    public Map chatPro(@RequestParam(value = "message", defaultValue = "How are you") String message) {
+        ChatResponse response = ChatClient.builder(zhiPuAiChatModel)
+                .build().prompt()
+//                .advisors(new QuestionAnswerAdvisor(vectorStore))
+                .user(message)
+                .call()
+                .chatResponse();
+        return Map.of("generation", response.getResult().getOutput().toString());
     }
 }
