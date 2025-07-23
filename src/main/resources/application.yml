@@ -16,3 +16,8 @@ spring:
           temperature: 0.7
       # 从启动参数中读取
       api-key: ${ZHIPUAI_API_KEY}
+#logging:
+#  level:
+#    org.springframework.ai: DEBUG
+#    org.springframework.web.client: DEBUG
+#    org.springframework.http.client: DEBUG
