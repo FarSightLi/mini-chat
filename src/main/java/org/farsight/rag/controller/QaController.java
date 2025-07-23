@@ -1,22 +1,29 @@
 package org.farsight.rag.controller;
 
+import org.farsight.rag.memory.RedisChatMemory;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.template.st.StTemplateRenderer;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import org.farsight.rag.service.ConversationService;
+import org.farsight.rag.model.ConversationHistory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -24,13 +31,19 @@ import java.util.stream.Collectors;
 public class QaController {
     private final ZhiPuAiChatModel zhiPuAiChatModel;
     private final VectorStore vectorStore;
+    private final ConversationService conversationService;
+    private final RedisChatMemory redisChatMemory;
 
     @Autowired
     public QaController(
             ZhiPuAiChatModel zhiPuAiChatModel,
-            VectorStore vectorStore) {
+            VectorStore vectorStore,
+            ConversationService conversationService,
+            RedisChatMemory redisChatMemory) {
         this.zhiPuAiChatModel = zhiPuAiChatModel;
         this.vectorStore = vectorStore;
+        this.conversationService = conversationService;
+        this.redisChatMemory = redisChatMemory;
     }
 
 
@@ -86,13 +99,60 @@ public class QaController {
     }
 
     @GetMapping("/ai/pro")
-    public Map chatPro(@RequestParam(value = "message", defaultValue = "How are you") String message) {
-        ChatResponse response = ChatClient.builder(zhiPuAiChatModel)
-                .build().prompt()
-//                .advisors(new QuestionAnswerAdvisor(vectorStore))
-                .user(message)
-                .call()
-                .chatResponse();
-        return Map.of("generation", response.getResult().getOutput().toString());
+    public Flux<ChatResponse> chatPro(
+            @RequestParam(value = "message", defaultValue = "How are you") String message,
+            @RequestParam(value = "conversationId", required = false) String conversationId) {
+
+        // 如果没有提供对话ID，则生成一个新的
+        if (conversationId == null || conversationId.isEmpty()) {
+            conversationId = UUID.randomUUID().toString();
+        }
+
+        PromptTemplate customPromptTemplate = PromptTemplate.builder()
+                .renderer(StTemplateRenderer.builder().startDelimiterToken('<').endDelimiterToken('>').build())
+                .template("""
+                                 <query>
+                        
+                                 Context information is below.
+                        
+                        ---------------------
+                        <question_answer_context>
+                        ---------------------
+                        
+                        Given the context information and no prior knowledge, answer the query.
+                        
+                        Follow these rules:
+                        
+                        1. If the answer is not in the context, just say that you don't know.
+                        2. Avoid statements like "Based on the context..." or "The provided information...".
+                                \s""")
+                .build();
+
+        QuestionAnswerAdvisor qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
+                .promptTemplate(customPromptTemplate)
+                .build();
+
+        // 构建聊天客户端
+        ChatClient chatClient = ChatClient.builder(zhiPuAiChatModel).build();
+        
+        // 创建消息列表
+        List<Message> messages = new ArrayList<>();
+        
+        // 添加当前用户消息
+        messages.add(new UserMessage(message));
+
+        // 返回流式响应，并在完成后保存对话历史
+        String finalConversationId = conversationId;
+        return chatClient
+                .prompt(new Prompt(messages))
+                .advisors(qaAdvisor)
+                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory).build())
+                .stream()
+                .chatResponse()
+                .doOnNext(chatResponse -> {
+                    messages.add(chatResponse.getResult().getOutput());
+                    redisChatMemory.add(finalConversationId, messages);
+                });
+
     }
 }
