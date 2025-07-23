@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  chroma:
+    image: chromadb/chroma:1.0.15
+    container_name: chroma-db
+    # 移除 network_mode: host
+    ports:
+      - "8010:8000"
+    restart: always
+    volumes:
+      - /root/docker-data/chroma:/data
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
