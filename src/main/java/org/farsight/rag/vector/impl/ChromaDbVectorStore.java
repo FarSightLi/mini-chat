@@ -1,7 +1,4 @@
 package org.farsight.rag.vector.impl;
-
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.farsight.rag.vector.VectorStore;
 
 import java.util.ArrayList;
@@ -32,7 +29,6 @@ public class ChromaDbVectorStore implements VectorStore {
 
         // 执行相似搜索
 //        List<TextSegment> results = embeddingStore.findRelevant(queryVector, topK);
-        List<TextSegment> results = new ArrayList<>();
 
         // 返回结果（转换为 Map 形式）
 //        return results.stream()

@@ -1,7 +1,11 @@
 package org.farsight.rag.config;
 
+import org.springframework.ai.document.MetadataMode;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatModel;
 import org.springframework.ai.zhipuai.ZhiPuAiChatOptions;
+import org.springframework.ai.zhipuai.ZhiPuAiEmbeddingModel;
+import org.springframework.ai.zhipuai.ZhiPuAiEmbeddingOptions;
 import org.springframework.ai.zhipuai.api.ZhiPuAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -13,10 +17,22 @@ public class ZhiPuAiConfig {
     private String apiKey;
 
     @Bean
-    public ZhiPuAiChatModel zhiPuAiChatModel() {
+    public ZhiPuAiApi zhiPuAiApi() {
+        return new ZhiPuAiApi(apiKey);
+    }
+
+    @Bean
+    public ZhiPuAiChatModel zhiPuAiChatModel(ZhiPuAiApi zhiPuAiApi) {
         // 手动创建实例并配置参数
-        return new ZhiPuAiChatModel(
-                new ZhiPuAiApi(apiKey)
-        );
+        return new ZhiPuAiChatModel(zhiPuAiApi);
+    }
+
+    @Bean
+    public EmbeddingModel embeddingModel(ZhiPuAiApi zhiPuAiApi) {
+        return new ZhiPuAiEmbeddingModel(zhiPuAiApi, MetadataMode.EMBED,
+                ZhiPuAiEmbeddingOptions.builder()
+                        .model("embedding-3")
+                        .dimensions(1536)
+                        .build());
     }
 }

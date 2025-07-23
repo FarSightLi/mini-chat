@@ -1,6 +1,15 @@
 spring:
   ai:
+    vectorstore:
+      chroma:
+        client:
+            host: 172.29.11.91
+            port: 8010
+        initialize-schema: true
     zhipuai:
+      embedding:
+        options:
+          model: embedding-2
       chat:
         options:
           model: glm-4-air
