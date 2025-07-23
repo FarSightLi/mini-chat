@@ -33,7 +33,7 @@ public class VectorConfig {
     @Bean
     public ChromaApi chromaApi(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
         // 注意：这里硬编码了 URL。更好的方式是从配置中获取。
-        String chromaUrl = "http://172.29.11.91:8010";
+        String chromaUrl = "http://localhost:8010";
         return new ChromaApi(chromaUrl, restClientBuilder, objectMapper);
     }
 
