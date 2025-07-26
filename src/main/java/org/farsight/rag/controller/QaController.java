@@ -4,6 +4,7 @@ import org.farsight.rag.memory.RedisChatMemory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -99,7 +100,7 @@ public class QaController {
     }
 
     @GetMapping("/ai/pro")
-    public Flux<ChatResponse> chatPro(
+    public Flux<String> chatPro(
             @RequestParam(value = "message", defaultValue = "How are you") String message,
             @RequestParam(value = "conversationId", required = false) String conversationId) {
 
@@ -123,8 +124,8 @@ public class QaController {
                         
                         Follow these rules:
                         
-                        1. If the answer is not in the context, just say that you don't know.
-                        2. Avoid statements like "Based on the context..." or "The provided information...".
+                        1. 如果答案不在上下文中，用你自己的知识回答
+                        2. 如果答案在上下文中，要告诉用户是依据什么回答的
                                 \s""")
                 .build();
 
@@ -143,14 +144,17 @@ public class QaController {
 
         // 返回流式响应，并在完成后保存对话历史
         String finalConversationId = conversationId;
+        StringBuilder allResponse = new StringBuilder();
         return chatClient
                 .prompt(new Prompt(messages))
                 .advisors(qaAdvisor)
                 .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory).build())
                 .stream()
-                .chatResponse()
-                .doOnNext(chatResponse -> {
-                    messages.add(chatResponse.getResult().getOutput());
+                .content()
+//                .chatResponse()
+                .doOnNext(allResponse::append)
+                .doOnComplete(()->{
+                    messages.add(new AssistantMessage(allResponse.toString()));
                     redisChatMemory.add(finalConversationId, messages);
                 });
 

@@ -92,7 +92,7 @@ public class RedisChatMemory implements ChatMemory {
         List<Message> messageList  = new ArrayList<>();
         if(obj != null){
             try {
-                List<String> list = objectMapper.convertValue(obj, new TypeReference<List<String>>() {});
+                List<String> list = objectMapper.convertValue(obj, new TypeReference<>() {});
                 for (String s : list) {
                     Message message = MessageSerializer.deserialize(s);
                     messageList.add(message);
