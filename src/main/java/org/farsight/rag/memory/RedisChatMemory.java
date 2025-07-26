@@ -1,6 +1,5 @@
 package org.farsight.rag.memory;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.farsight.rag.config.MessageSerializer;
@@ -19,10 +18,11 @@ import java.util.List;
 @Slf4j
 public class RedisChatMemory implements ChatMemory {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final Integer MAX_HISTORY_SIZE = 10;
 
-    public RedisChatMemory(RedisTemplate<String, Object> objectRedisTemplate,
+    public RedisChatMemory(RedisTemplate<String, String> objectRedisTemplate,
                            ObjectMapper objectMapper){
         this.redisTemplate = objectRedisTemplate;
         this.objectMapper = objectMapper;
@@ -38,7 +38,12 @@ public class RedisChatMemory implements ChatMemory {
      */
     @Override
     public void add(String conversationId, Message message) {
-        setToRedis(conversationId, List.of(message));
+        String serializedMessage = MessageSerializer.serialize(message);
+        // 使用 Redis List 的 RPUSH 命令在列表右侧添加元素
+        redisTemplate.opsForList().rightPush(conversationId, serializedMessage);
+        // 限制列表大小，只保留最新的 MAX_HISTORY_SIZE 条记录
+        redisTemplate.opsForList().trim(conversationId, -MAX_HISTORY_SIZE, -1);
+        log.info("Adding message to Redis: {} with id: {}", message, conversationId);
 
 
     }
@@ -51,10 +56,14 @@ public class RedisChatMemory implements ChatMemory {
      */
     @Override
     public void add(String conversationId, List<Message> messages) {
-        List<Message> messageList = getFromRedis(conversationId);
-        messageList.addAll(messages);
-
-        setToRedis(conversationId,messages);
+        List<String> serializedMessages = new ArrayList<>();
+        for (Message message : messages) {
+            serializedMessages.add(MessageSerializer.serialize(message));
+        }
+        // 使用 Redis List 的 RPUSH 命令在列表右侧添加多个元素
+        redisTemplate.opsForList().rightPushAll(conversationId, serializedMessages);
+        // 限制列表大小，只保留最新的 MAX_HISTORY_SIZE 条记录
+        redisTemplate.opsForList().trim(conversationId, -MAX_HISTORY_SIZE, -1);
 
 
     }
@@ -67,9 +76,20 @@ public class RedisChatMemory implements ChatMemory {
      */
     @Override
     public List<Message> get(String conversationId) {
-        List<Message> messageList = getFromRedis(conversationId);
-        return messageList.stream()
-                .toList();
+        List<Message> messageList = new ArrayList<>();
+        try {
+            // 使用 List 操作获取所有元素
+            List<String> serializedMessages = redisTemplate.opsForList().range(conversationId, 0, -1);
+            if (serializedMessages != null) {
+                for (String serializedMessage : serializedMessages) {
+                    Message message = MessageSerializer.deserialize(serializedMessage);
+                    messageList.add(message);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error deserializing messages from Redis", e);
+        }
+        return messageList;
     }
 
     /**
@@ -81,45 +101,6 @@ public class RedisChatMemory implements ChatMemory {
         redisTemplate.delete(conversationId);
 
     }
-
-    /**
-     * 从Redis获取数据工具方法
-     * @param conversationId
-     * @return
-     */
-    private List<Message> getFromRedis(String conversationId){
-        Object obj =  redisTemplate.opsForValue().get(conversationId);
-        List<Message> messageList  = new ArrayList<>();
-        if(obj != null){
-            try {
-                List<String> list = objectMapper.convertValue(obj, new TypeReference<>() {});
-                for (String s : list) {
-                    Message message = MessageSerializer.deserialize(s);
-                    messageList.add(message);
-                }
-            } catch (Exception e) {
-                log.error("Error deserializing messages from Redis", e);
-            }
-        }
-        return messageList;
-    }
-
-
-    /**
-     * 将数据存入Redis工具方法
-     * @param conversationId
-     * @param messages
-     */
-    private void setToRedis(String conversationId,List<Message> messages){
-        List<String> stringList = new ArrayList<>();
-        for (Message message : messages) {
-            String serialize = MessageSerializer.serialize(message);
-            stringList.add(serialize);
-        }
-        redisTemplate.opsForValue().set(conversationId,stringList);
-    }
-
-
 }
 
 

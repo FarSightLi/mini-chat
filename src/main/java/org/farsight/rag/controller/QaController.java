@@ -34,6 +34,7 @@ public class QaController {
     private final VectorStore vectorStore;
     private final ConversationService conversationService;
     private final RedisChatMemory redisChatMemory;
+    private final ChatClient chatClient; // 添加为字段
 
     @Autowired
     public QaController(
@@ -45,6 +46,7 @@ public class QaController {
         this.vectorStore = vectorStore;
         this.conversationService = conversationService;
         this.redisChatMemory = redisChatMemory;
+        this.chatClient = ChatClient.builder(zhiPuAiChatModel).build();
     }
 
 
@@ -126,19 +128,19 @@ public class QaController {
                         
                         1. 如果答案不在上下文中，用你自己的知识回答
                         2. 如果答案在上下文中，要告诉用户是依据什么回答的
+                        3. 展示你看到的上下文
                                 \s""")
                 .build();
 
         QuestionAnswerAdvisor qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
                 .promptTemplate(customPromptTemplate)
+                // 从向量数据库中搜索
+                .searchRequest(SearchRequest.builder().topK(3).build())
                 .build();
 
-        // 构建聊天客户端
-        ChatClient chatClient = ChatClient.builder(zhiPuAiChatModel).build();
-        
         // 创建消息列表
         List<Message> messages = new ArrayList<>();
-        
+
         // 添加当前用户消息
         messages.add(new UserMessage(message));
 
@@ -146,17 +148,20 @@ public class QaController {
         String finalConversationId = conversationId;
         StringBuilder allResponse = new StringBuilder();
         return chatClient
-                .prompt(new Prompt(messages))
+                .prompt()
+                .user(message)
+                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
+                        .conversationId(finalConversationId)
+                        .build())
+                // 注意：advisors会按顺序执行
                 .advisors(qaAdvisor)
-                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory).build())
                 .stream()
                 .content()
 //                .chatResponse()
                 .doOnNext(allResponse::append)
                 .doOnComplete(()->{
-                    messages.add(new AssistantMessage(allResponse.toString()));
-                    redisChatMemory.add(finalConversationId, messages);
+//                    messages.add(new AssistantMessage(allResponse.toString()));
+//                    redisChatMemory.add(finalConversationId, messages);
                 });
-
     }
 }
